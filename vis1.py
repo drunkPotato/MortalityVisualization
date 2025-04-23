@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.express as px
 
 # Step 1: Load the CSV file (adjust path if necessary)
-file_path = "Weekly_number_of_deaths.csv"
+file_path = "data/Weekly_number_of_deaths.csv"
 df = pd.read_csv(file_path, delimiter=';', engine='python')
 
 # Step 2: Clean the 'Age' column (remove whitespace)
