@@ -1,12 +1,31 @@
+import pandas as pd
 import plotly.express as px
 
-# Create a combined DataFrame suitable for plotly.express
+# Step 1: Load the CSV file (adjust path if necessary)
+file_path = "Weekly_number_of_deaths.csv"
+df = pd.read_csv(file_path, delimiter=';', engine='python')
+
+# Step 2: Clean the 'Age' column (remove whitespace)
+df['Age'] = df['Age'].str.strip()
+
+# Step 3: Filter for age groups 0–64 and 65+
+df_0_64 = df[df['Age'] == '0-64'].copy()
+df_65_plus = df[df['Age'] == '65+'].copy()
+
+# Step 4: Convert columns to proper formats
+df_0_64['Ending'] = pd.to_datetime(df_0_64['Ending'], format='%d.%m.%Y')
+df_65_plus['Ending'] = pd.to_datetime(df_65_plus['Ending'], format='%d.%m.%Y')
+
+df_0_64['NoDeaths_EP'] = pd.to_numeric(df_0_64['NoDeaths_EP'], errors='coerce')
+df_65_plus['NoDeaths_EP'] = pd.to_numeric(df_65_plus['NoDeaths_EP'], errors='coerce')
+
+# Step 5: Combine data for Plotly Express
 df_combined = pd.concat([
     df_0_64[['Ending', 'NoDeaths_EP']].rename(columns={'NoDeaths_EP': 'Deaths'}).assign(Age='0–64'),
     df_65_plus[['Ending', 'NoDeaths_EP']].rename(columns={'NoDeaths_EP': 'Deaths'}).assign(Age='65+')
 ])
 
-# Create the line chart using plotly.express
+# Step 6: Create the Plotly Express line chart
 fig = px.line(
     df_combined,
     x='Ending',
@@ -16,8 +35,7 @@ fig = px.line(
     title='Weekly Number of Deaths by Age Group (0–64 vs. 65+)'
 )
 
-# Export as standalone HTML using CDN
-export_path = "asset1.html"
-fig.write_html(export_path, include_plotlyjs="cdn")
+# Step 7: Export the chart as HTML (uses CDN for plotly.js)
+fig.write_html("weekly_deaths_plotly_express.html", include_plotlyjs="cdn")
 
-export_path
+print("Chart exported to: weekly_deaths_plotly_express.html")
