@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.express as px
 
 # Step 1: Load the CSV
-df = pd.read_csv("Mortality_rate_per_100000_inhabitants.csv")
+df = pd.read_csv("data/Mortality_rate_per_100000_inhabitants.csv")
 
 # Step 2: Rename columns for convenience
 df.columns = ['Year', 'Men', 'Women']
