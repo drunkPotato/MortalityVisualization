@@ -1,0 +1,36 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+  }
+  
+  header {
+    background-color: #222;
+    color: white;
+    padding: 1.5rem;
+    text-align: center;
+  }
+  
+  main {
+    padding: 2rem;
+    max-width: 900px;
+    margin: auto;
+  }
+  
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+  
+  p {
+    line-height: 1.6;
+  }
+  
+  footer {
+    text-align: center;
+    margin-top: 4rem;
+    font-size: 0.9rem;
+    color: #777;
+  }
+  
