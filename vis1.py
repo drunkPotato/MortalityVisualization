@@ -17,7 +17,7 @@ fig = px.line(
 )
 
 # Export as standalone HTML using CDN
-export_path = "/mnt/data/weekly_deaths_plotly_express.html"
+export_path = "asset1.html"
 fig.write_html(export_path, include_plotlyjs="cdn")
 
 export_path
