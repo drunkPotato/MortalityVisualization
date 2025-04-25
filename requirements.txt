@@ -1,0 +1,8 @@
+# requirements.txt
+streamlit
+pandas
+openpyxl
+plotly
+# matplotlib
+# seaborn
+# Add any other libraries used
