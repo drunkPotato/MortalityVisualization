@@ -61,10 +61,3 @@ def create_weekly_deaths_plot(dataframe):
         print(f"An unexpected error occurred in create_weekly_deaths_plot: {e}")
         # Optionally re-raise or return None depending on desired app behavior
         return None # Return None on error
-
-# Keep this function if you plan to use it later, otherwise remove it
-def create_another_plot(dataframe, some_parameter):
-    # ... logic ...
-    # fig = ...
-    # return fig
-    pass

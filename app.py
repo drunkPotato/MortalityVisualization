@@ -14,28 +14,38 @@ st.set_page_config(
 # --- Data Loading Function (Keep as before, handles CSV/XLSX) ---
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
-@st.cache_data # Cache the data loading
-def load_data(file_path, is_excel=False):
-    """Loads data from CSV or Excel, handling potential errors."""
+
+@st.cache_data
+def load_data(file_path, is_excel=False, specific_delimiter=None, decimal_separator='.'): # ADD decimal_separator argument, default to '.'
+    """Loads data from CSV or Excel, handling delimiters and decimal separators."""
     full_path = os.path.join(DATA_DIR, file_path)
-    # st.write(f"Attempting to load: {full_path}") # Uncomment for debugging load paths
     try:
         if is_excel or file_path.lower().endswith('.xlsx'):
-            # Make sure openpyxl is installed: pip install openpyxl
             df = pd.read_excel(full_path)
             file_type = "Excel"
         elif file_path.lower().endswith('.csv'):
-            # --- Assume semicolon delimiter for CSVs unless specified otherwise ---
-            # You might need error handling here to try comma if semicolon fails
+            file_type = "CSV"
+            delimiter_to_use = specific_delimiter if specific_delimiter else ';' # Prioritize specific, else default to ';'
             try:
-                df = pd.read_csv(full_path, delimiter=';')
-            except pd.errors.ParserError:
-                 st.warning(f"Parsing {file_path} with ';' failed, trying with ','...")
-                 df = pd.read_csv(full_path, delimiter=',') # Fallback to comma
+                # Use the specified or default delimiter AND the decimal separator
+                df = pd.read_csv(full_path, delimiter=delimiter_to_use, decimal=decimal_separator)
+            except (pd.errors.ParserError, ValueError) as e1:
+                # If the first attempt fails, and we didn't specify a delimiter, try ','
+                if not specific_delimiter and delimiter_to_use == ';':
+                    st.warning(f"Parsing {file_path} with delimiter='{delimiter_to_use}' failed ({e1}), trying with ','...")
+                    delimiter_to_use = ','
+                    try:
+                        # Try again with comma delimiter AND the specified decimal separator
+                        df = pd.read_csv(full_path, delimiter=delimiter_to_use, decimal=decimal_separator)
+                    except Exception as e2:
+                       st.error(f"Failed to parse {file_path} with delimiter=',' ({e2}) after initial failure.")
+                       return None
+                else: # Failed even with specific delimiter, or failed the fallback comma attempt
+                    st.error(f"Error parsing {file_path} with delimiter='{delimiter_to_use}' and decimal='{decimal_separator}': {e1}")
+                    return None
             except Exception as csv_e: # Catch other CSV reading errors
                  st.error(f"Error reading CSV {file_path}: {csv_e}")
                  return None
-            file_type = "CSV"
         else:
             st.error(f"Unsupported file format: {file_path}")
             return None
@@ -43,25 +53,20 @@ def load_data(file_path, is_excel=False):
         if df is None or df.empty:
              st.warning(f"Loaded empty or None dataframe from {file_path}")
              return None
-        # st.success(f"Successfully loaded {file_type}: {file_path}") # Uncomment for debugging load success
+        # st.success(f"Successfully loaded {file_type}: {file_path}") # Debug print
         return df
     except FileNotFoundError:
         st.error(f"Error: Data file not found at {full_path}")
         return None
-    except pd.errors.ParserError as e:
-         # This might catch issues even with the fallback, e.g., inconsistent delimiters
-         st.error(f"Final parsing error for {file_path}: {e}. Check file structure/delimiters.")
-         return None
     except Exception as e:
-        # Catch other potential errors (e.g., permissions, corrupted Excel file)
         st.error(f"An unexpected error occurred loading {file_path}: {e}")
         return None
 
 # --- Load All Required Datasets ---
 # Load data based on the identified files in the 'data' directory image
 df_weekly_deaths = load_data('Weekly_number_of_deaths.csv')                     # For Vis 1
-df_absolute_deaths = load_data('Deaths_Absolute_number.csv')                   # For Vis 2
-df_rate_100k = load_data('Mortality_rate_per_100000_inhabitants.csv')           # For Vis 3
+df_absolute_deaths = load_data('Deaths_Absolute_number.csv', specific_delimiter=',') # For Vis 2
+df_rate_100k = load_data('Mortality_rate_per_100000_inhabitants.csv', specific_delimiter=',', decimal_separator=',')# For Vis 3
 df_by_canton = load_data('Deaths_per_week_by_5-year_age_group_sex_and_canton.csv') # For Vis 4
 df_by_region = load_data('Deaths_per_week_by_5-year_age_group_sex_and_major_region.csv')# For Vis 5
 df_causes_men = load_data('Sterbefälle_und_Sterbeziffern_wichtiger_Todesursachen_Männer_seit_1970.xlsx', is_excel=True) # For Vis 6
@@ -159,37 +164,39 @@ if current_view == 'vis1':
 
 # VIS 2 Display Logic
 elif current_view == 'vis2':
-    st.header("Absolute Number of Deaths")
+    st.header("Absolute Number of Deaths per Year") # Slightly more descriptive header
     if VIS2_IMPORTED and df_absolute_deaths is not None:
-        # --- Replace placeholder with actual plot call when vis2.py is ready ---
-        # fig2 = create_absolute_deaths_plot(df_absolute_deaths.copy())
-        # if fig2:
-        #     st.plotly_chart(fig2, use_container_width=True)
-        # else:
-        #     st.warning("Could not generate plot from vis2.py")
-        st.info("Placeholder: Vis 2 Function needs to be implemented in vis2.py")
-        st.dataframe(df_absolute_deaths.head()) # Show head as placeholder
+        # --- Call the function from vis2.py ---
+        fig2 = create_absolute_deaths_plot(df_absolute_deaths.copy()) # Pass a copy
+        if fig2:
+            # Display the plot if successfully created
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            # Show a warning if plot creation failed inside the function
+            st.warning("Could not generate the absolute deaths plot. Check data format or errors in vis2.py.")
+        # --- End of updated logic for Vis 2 ---
     elif not VIS2_IMPORTED:
-         st.error("Cannot display plot: Error in vis2.py or function missing.")
+         st.error("Cannot display plot: vis2.py could not be imported or the function 'create_absolute_deaths_plot' is missing/has errors.")
     else: # df_absolute_deaths is None
-        st.error("Cannot display plot: Data ('Deaths_Absolute_number.csv') failed to load.")
+        st.error("Cannot display plot: Data file 'Deaths_Absolute_number.csv' failed to load.")
 
 # VIS 3 Display Logic
 elif current_view == 'vis3':
     st.header("Mortality Rate per 100,000 Inhabitants")
     if VIS3_IMPORTED and df_rate_100k is not None:
-        # --- Replace placeholder with actual plot call when vis3.py is ready ---
-        # fig3 = create_mortality_rate_plot(df_rate_100k.copy())
-        # if fig3:
-        #     st.plotly_chart(fig3, use_container_width=True)
-        # else:
-        #      st.warning("Could not generate plot from vis3.py")
-        st.info("Placeholder: Vis 3 Function needs to be implemented in vis3.py")
-        st.dataframe(df_rate_100k.head()) # Show head as placeholder
+        # --- Call the function from vis3.py ---
+        fig3 = create_mortality_rate_plot(df_rate_100k.copy()) # Pass a copy
+        if fig3:
+            # Display the plot if successfully created
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            # Show a warning if plot creation failed inside the function
+            st.warning("Could not generate the mortality rate plot. Check data format or errors in vis3.py.")
+        # --- End of updated logic for Vis 3 ---
     elif not VIS3_IMPORTED:
-         st.error("Cannot display plot: Error in vis3.py or function missing.")
+         st.error("Cannot display plot: vis3.py could not be imported or the function 'create_mortality_rate_plot' is missing/has errors.")
     else: # df_rate_100k is None
-        st.error("Cannot display plot: Data ('Mortality_rate_per_100000_inhabitants.csv') failed to load.")
+        st.error("Cannot display plot: Data file 'Mortality_rate_per_100000_inhabitants.csv' failed to load. Check delimiter/decimal settings.")
 
 # VIS 4 Display Logic
 elif current_view == 'vis4':
