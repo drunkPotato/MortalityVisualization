@@ -1,258 +1,210 @@
-# app.py - Updated for specified data files and navigation
-
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import os
 
 # --- Page Configuration ---
-st.set_page_config(
-    page_title="Mortality Visualization Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(layout="wide", page_title="Swiss Mortality Trends")
 
-# --- Data Loading Function (Keep as before, handles CSV/XLSX) ---
-DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+st.title("Swiss Mortality Trends")
 
+# --- Data Loading Functions ---
 
 @st.cache_data
-def load_data(file_path, is_excel=False, specific_delimiter=None, decimal_separator='.'): # ADD decimal_separator argument, default to '.'
-    """Loads data from CSV or Excel, handling delimiters and decimal separators."""
-    full_path = os.path.join(DATA_DIR, file_path)
+def load_weekly_deaths_data(file_path):
     try:
-        if is_excel or file_path.lower().endswith('.xlsx'):
-            df = pd.read_excel(full_path)
-            file_type = "Excel"
-        elif file_path.lower().endswith('.csv'):
-            file_type = "CSV"
-            delimiter_to_use = specific_delimiter if specific_delimiter else ';' # Prioritize specific, else default to ';'
-            try:
-                # Use the specified or default delimiter AND the decimal separator
-                df = pd.read_csv(full_path, delimiter=delimiter_to_use, decimal=decimal_separator)
-            except (pd.errors.ParserError, ValueError) as e1:
-                # If the first attempt fails, and we didn't specify a delimiter, try ','
-                if not specific_delimiter and delimiter_to_use == ';':
-                    st.warning(f"Parsing {file_path} with delimiter='{delimiter_to_use}' failed ({e1}), trying with ','...")
-                    delimiter_to_use = ','
-                    try:
-                        # Try again with comma delimiter AND the specified decimal separator
-                        df = pd.read_csv(full_path, delimiter=delimiter_to_use, decimal=decimal_separator)
-                    except Exception as e2:
-                       st.error(f"Failed to parse {file_path} with delimiter=',' ({e2}) after initial failure.")
-                       return None
-                else: # Failed even with specific delimiter, or failed the fallback comma attempt
-                    st.error(f"Error parsing {file_path} with delimiter='{delimiter_to_use}' and decimal='{decimal_separator}': {e1}")
-                    return None
-            except Exception as csv_e: # Catch other CSV reading errors
-                 st.error(f"Error reading CSV {file_path}: {csv_e}")
-                 return None
-        else:
-            st.error(f"Unsupported file format: {file_path}")
-            return None
-
-        if df is None or df.empty:
-             st.warning(f"Loaded empty or None dataframe from {file_path}")
-             return None
-        # st.success(f"Successfully loaded {file_type}: {file_path}") # Debug print
+        df = pd.read_csv(file_path, delimiter=';')
+        df['Ending_Date'] = pd.to_datetime(df['Ending'], format='%d.%m.%Y', errors='coerce')
+        numeric_cols = ['NoDeaths_EP', 'Expected', 'LowerB', 'UpperB']
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        df['Diff'] = df['Diff'].replace('.', pd.NA)
+        df['Diff'] = pd.to_numeric(df['Diff'], errors='coerce')
+        if 'Age' in df.columns:
+            df['Age'] = df['Age'].str.strip()
+        df.dropna(subset=['Ending_Date'], inplace=True)
+        df = df.sort_values(by=['Ending_Date', 'Year', 'Week']).reset_index(drop=True)
         return df
     except FileNotFoundError:
-        st.error(f"Error: Data file not found at {full_path}")
-        return None
+        st.error(f"Error: Weekly deaths file not found at '{file_path}'.")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"An unexpected error occurred loading {file_path}: {e}")
-        return None
+        st.error(f"Error loading weekly deaths data: {e}")
+        return pd.DataFrame()
 
-# --- Load All Required Datasets ---
-# Load data based on the identified files in the 'data' directory image
-df_weekly_deaths = load_data('Weekly_number_of_deaths.csv')                     # For Vis 1
-df_absolute_deaths = load_data('Deaths_Absolute_number.csv', specific_delimiter=',') # For Vis 2
-df_rate_100k = load_data('Mortality_rate_per_100000_inhabitants.csv', specific_delimiter=',', decimal_separator=',')# For Vis 3
-df_by_canton = load_data('Deaths_per_week_by_5-year_age_group_sex_and_canton.csv') # For Vis 4
-df_by_region = load_data('Deaths_per_week_by_5-year_age_group_sex_and_major_region.csv')# For Vis 5
-df_causes_men = load_data('Sterbefälle_und_Sterbeziffern_wichtiger_Todesursachen_Männer_seit_1970.xlsx', is_excel=True) # For Vis 6
-
-# Optional: Load data for women's causes of death if needed later
-# df_causes_women = load_data('Sterbefälle_und_Sterbeziffern_wichtiger_Todesursachen_Frauen_seit_1970.xlsx', is_excel=True)
-
-# --- Import Visualization Functions ---
-# Use descriptive function names you intend to create in visX.py files
-
-# VIS1: Weekly Deaths
-try:
-    from vis1 import create_weekly_deaths_plot
-    VIS1_IMPORTED = True
-except ImportError:
-    VIS1_IMPORTED = False
-
-# VIS2: Absolute Deaths
-try:
-    from vis2 import create_absolute_deaths_plot # Implement this in vis2.py
-    VIS2_IMPORTED = True
-except ImportError:
-    VIS2_IMPORTED = False
-
-# VIS3: Mortality Rate
-try:
-    from vis3 import create_mortality_rate_plot # Implement this in vis3.py
-    VIS3_IMPORTED = True
-except ImportError:
-    VIS3_IMPORTED = False
-
-# VIS4: Deaths by Canton
-try:
-    from vis4 import create_canton_plot # Implement this in vis4.py
-    VIS4_IMPORTED = True
-except ImportError:
-    VIS4_IMPORTED = False
-
-# VIS5: Deaths by Major Region
-try:
-    from vis5 import create_region_plot # Implement this in vis5.py
-    VIS5_IMPORTED = True
-except ImportError:
-    VIS5_IMPORTED = False
-
-# VIS6: Causes of Death (Men)
-try:
-    from vis6 import create_causes_men_plot # Implement this in vis6.py
-    VIS6_IMPORTED = True
-except ImportError:
-    VIS6_IMPORTED = False
-
-
-# --- Initialize Session State for Navigation ---
-if 'current_view' not in st.session_state:
-    st.session_state.current_view = 'vis1' # Default view
-
-# --- Sidebar Navigation ---
-st.sidebar.title("Navigation")
-st.sidebar.write("Select a visualization:")
-
-# Use more descriptive button labels based on the data
-if st.sidebar.button("Weekly Deaths"):
-    st.session_state.current_view = 'vis1'
-if st.sidebar.button("Absolute Deaths"):
-    st.session_state.current_view = 'vis2'
-if st.sidebar.button("Mortality Rate / 100k"):
-    st.session_state.current_view = 'vis3'
-if st.sidebar.button("Deaths by Canton"):
-    st.session_state.current_view = 'vis4'
-if st.sidebar.button("Deaths by Major Region"):
-    st.session_state.current_view = 'vis5'
-if st.sidebar.button("Causes of Death (Men)"):
-    st.session_state.current_view = 'vis6'
-
-# --- Main Content Area ---
-st.title("Swiss Mortality Data Visualization")
-
-# Display content based on the selected view
-current_view = st.session_state.current_view
-
-# VIS 1 Display Logic
-if current_view == 'vis1':
-    st.header("Weekly Deaths Overview")
-    if VIS1_IMPORTED and df_weekly_deaths is not None:
-        fig1 = create_weekly_deaths_plot(df_weekly_deaths.copy()) # Pass a copy to avoid modifying cached data
-        if fig1:
-            st.plotly_chart(fig1, use_container_width=True)
+@st.cache_data
+def load_absolute_deaths_data(file_path):
+    try:
+        df = pd.read_csv(file_path, delimiter=',')
+        if 'X.1' in df.columns:
+            df.rename(columns={'X.1': 'Year'}, inplace=True)
+        elif df.columns[0].isdigit() or (df.columns[0].lower() == 'year' and len(df.columns[0])==4 ):
+            df.rename(columns={df.columns[0]: 'Year'}, inplace=True)
         else:
-            st.warning("Could not generate the weekly deaths plot.")
-    elif not VIS1_IMPORTED:
-         st.error("Cannot display plot: Error in vis1.py.")
-    else: # df_weekly_deaths is None
-        st.error("Cannot display plot: Data ('Weekly_number_of_deaths.csv') failed to load.")
+            st.warning("Could not identify Year column in absolute deaths data. Please check column names.")
+            return pd.DataFrame()
 
-# VIS 2 Display Logic
-elif current_view == 'vis2':
-    st.header("Absolute Number of Deaths per Year") # Slightly more descriptive header
-    if VIS2_IMPORTED and df_absolute_deaths is not None:
-        # --- Call the function from vis2.py ---
-        fig2 = create_absolute_deaths_plot(df_absolute_deaths.copy()) # Pass a copy
-        if fig2:
-            # Display the plot if successfully created
-            st.plotly_chart(fig2, use_container_width=True)
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
+        numeric_cols_abs = ['Men', 'Women']
+        for col in numeric_cols_abs:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            else:
+                df[col] = pd.NA
+        df.dropna(subset=['Year'], inplace=True)
+        df = df.sort_values(by='Year').reset_index(drop=True)
+        return df
+    except FileNotFoundError:
+        st.error(f"Error: Absolute deaths file not found at '{file_path}'.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error loading absolute deaths data: {e}")
+        return pd.DataFrame()
+
+@st.cache_data
+def load_population_data(file_path):
+    """Loads yearly population data."""
+    try:
+        df = pd.read_csv(file_path, delimiter=';')
+        if len(df.columns) >= 2:
+            df.rename(columns={df.columns[0]: 'Year', df.columns[1]: 'Population'}, inplace=True)
         else:
-            # Show a warning if plot creation failed inside the function
-            st.warning("Could not generate the absolute deaths plot. Check data format or errors in vis2.py.")
-        # --- End of updated logic for Vis 2 ---
-    elif not VIS2_IMPORTED:
-         st.error("Cannot display plot: vis2.py could not be imported or the function 'create_absolute_deaths_plot' is missing/has errors.")
-    else: # df_absolute_deaths is None
-        st.error("Cannot display plot: Data file 'Deaths_Absolute_number.csv' failed to load.")
+            st.error("Population data CSV does not have at least two columns.")
+            return pd.DataFrame()
 
-# VIS 3 Display Logic
-elif current_view == 'vis3':
-    st.header("Mortality Rate per 100,000 Inhabitants")
-    if VIS3_IMPORTED and df_rate_100k is not None:
-        # --- Call the function from vis3.py ---
-        fig3 = create_mortality_rate_plot(df_rate_100k.copy()) # Pass a copy
-        if fig3:
-            # Display the plot if successfully created
-            st.plotly_chart(fig3, use_container_width=True)
-        else:
-            # Show a warning if plot creation failed inside the function
-            st.warning("Could not generate the mortality rate plot. Check data format or errors in vis3.py.")
-        # --- End of updated logic for Vis 3 ---
-    elif not VIS3_IMPORTED:
-         st.error("Cannot display plot: vis3.py could not be imported or the function 'create_mortality_rate_plot' is missing/has errors.")
-    else: # df_rate_100k is None
-        st.error("Cannot display plot: Data file 'Mortality_rate_per_100000_inhabitants.csv' failed to load. Check delimiter/decimal settings.")
+        if df['Year'].dtype == 'object':
+            df['Year'] = df['Year'].str.replace('"', '', regex=False)
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
 
-# VIS 4 Display Logic
-elif current_view == 'vis4':
-    st.header("Deaths per Week by Canton, Age Group, and Sex")
-    if VIS4_IMPORTED and df_by_canton is not None:
-        # --- Replace placeholder with actual plot call when vis4.py is ready ---
-        # fig4 = create_canton_plot(df_by_canton.copy()) # Might need filters too
-        # if fig4:
-        #     st.plotly_chart(fig4, use_container_width=True)
-        # else:
-        #      st.warning("Could not generate plot from vis4.py")
-        st.info("Placeholder: Vis 4 Function needs to be implemented in vis4.py (likely needs filters)")
-        st.dataframe(df_by_canton.head()) # Show head as placeholder
-    elif not VIS4_IMPORTED:
-         st.error("Cannot display plot: Error in vis4.py or function missing.")
-    else: # df_by_canton is None
-        st.error("Cannot display plot: Data ('Deaths_per_week_by_5-year_age_group_sex_and_canton.csv') failed to load.")
+        if df['Population'].dtype == 'object':
+            df['Population'] = df['Population'].str.replace('"', '', regex=False)
+        df['Population'] = pd.to_numeric(df['Population'], errors='coerce')
 
-# VIS 5 Display Logic
-elif current_view == 'vis5':
-    st.header("Deaths per Week by Major Region, Age Group, and Sex")
-    if VIS5_IMPORTED and df_by_region is not None:
-        # --- Replace placeholder with actual plot call when vis5.py is ready ---
-        # fig5 = create_region_plot(df_by_region.copy()) # Might need filters too
-        # if fig5:
-        #     st.plotly_chart(fig5, use_container_width=True)
-        # else:
-        #      st.warning("Could not generate plot from vis5.py")
-        st.info("Placeholder: Vis 5 Function needs to be implemented in vis5.py (likely needs filters)")
-        st.dataframe(df_by_region.head()) # Show head as placeholder
-    elif not VIS5_IMPORTED:
-         st.error("Cannot display plot: Error in vis5.py or function missing.")
-    else: # df_by_region is None
-        st.error("Cannot display plot: Data ('Deaths_per_week_by_5-year_age_group_sex_and_major_region.csv') failed to load.")
+        df.dropna(subset=['Year', 'Population'], inplace=True)
+        df = df.sort_values(by='Year').reset_index(drop=True)
+        return df
+    except FileNotFoundError:
+        st.error(f"Error: Population file not found at '{file_path}'.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error loading population data: {e}")
+        return pd.DataFrame()
 
-# VIS 6 Display Logic
-elif current_view == 'vis6':
-    st.header("Causes of Death Since 1970 (Men)")
-    if VIS6_IMPORTED and df_causes_men is not None:
-        # --- Replace placeholder with actual plot call when vis6.py is ready ---
-        # fig6 = create_causes_men_plot(df_causes_men.copy()) # Might need filters too
-        # if fig6:
-        #     st.plotly_chart(fig6, use_container_width=True)
-        # else:
-        #      st.warning("Could not generate plot from vis6.py")
-        st.info("Placeholder: Vis 6 Function needs to be implemented in vis6.py")
-        st.dataframe(df_causes_men.head()) # Show head as placeholder
-    elif not VIS6_IMPORTED:
-         st.error("Cannot display plot: Error in vis6.py or function missing.")
-    else: # df_causes_men is None
-        st.error("Cannot display plot: Data ('Sterbefälle_und_Sterbeziffern_wichtiger_Todesursachen_Männer_seit_1970.xlsx') failed to load.")
+# --- Define File Paths ---
+data_folder = "data"
+file_weekly_deaths = os.path.join(data_folder, "Weekly_number_of_deaths.csv")
+file_absolute_deaths = os.path.join(data_folder, "Deaths_Absolute_number.csv")
+file_population = os.path.join(data_folder, "Switzerland_Population.csv")
 
-# Fallback for unknown view state
+# --- Load Data ---
+df_weekly = load_weekly_deaths_data(file_weekly_deaths)
+df_absolute_raw = load_absolute_deaths_data(file_absolute_deaths)
+df_population = load_population_data(file_population)
+
+# --- Process Data for Mortality Rates ---
+df_absolute_with_rates = pd.DataFrame()
+
+if not df_absolute_raw.empty and not df_population.empty:
+    df_merged = pd.merge(df_absolute_raw, df_population, on='Year', how='left')
+    if 'Men' in df_merged.columns and 'Women' in df_merged.columns:
+        df_merged['Total_Deaths'] = df_merged['Men'].fillna(0) + df_merged['Women'].fillna(0)
+    else:
+        df_merged['Total_Deaths'] = pd.NA
+
+    if 'Population' in df_merged.columns:
+        if 'Men' in df_merged.columns:
+            df_merged['Rate_Men'] = df_merged.apply(
+                lambda row: (row['Men'] / row['Population']) * 100000 if pd.notna(row['Men']) and pd.notna(row['Population']) and row['Population'] != 0 else pd.NA,
+                axis=1
+            )
+        if 'Women' in df_merged.columns:
+            df_merged['Rate_Women'] = df_merged.apply(
+                lambda row: (row['Women'] / row['Population']) * 100000 if pd.notna(row['Women']) and pd.notna(row['Population']) and row['Population'] != 0 else pd.NA,
+                axis=1
+            )
+        if 'Total_Deaths' in df_merged.columns:
+            df_merged['Rate_Total'] = df_merged.apply(
+                lambda row: (row['Total_Deaths'] / row['Population']) * 100000 if pd.notna(row['Total_Deaths']) and pd.notna(row['Population']) and row['Population'] != 0 else pd.NA,
+                axis=1
+            )
+        df_absolute_with_rates = df_merged.copy()
+    else:
+        st.warning("Population column missing after merge or in population data, cannot calculate rates.")
+elif df_absolute_raw.empty:
+    st.info("Absolute deaths data could not be loaded. Rates cannot be calculated.")
+elif df_population.empty:
+    st.info("Population data could not be loaded. Rates cannot be calculated.")
+
+
+# --- Graph 1: Weekly Deaths by Age Group ---
+st.header("Weekly Deaths by Age Group (0-64 vs. 65+)")
+if not df_weekly.empty:
+    age_groups_to_plot = ["0-64", "65+"]
+    plot_df_weekly_combined = df_weekly[df_weekly['Age'].isin(age_groups_to_plot)]
+    if not plot_df_weekly_combined.empty:
+        fig_weekly = px.line(plot_df_weekly_combined, x='Ending_Date', y='NoDeaths_EP', color='Age',
+                             title='Weekly Deaths (NoDeaths_EP) by Age Group',
+                             labels={'Ending_Date': 'Date', 'NoDeaths_EP': 'Number of Deaths', 'Age': 'Age Group'})
+        st.plotly_chart(fig_weekly, use_container_width=True, config={'displayModeBar': False}) # Modebar hidden
+    else:
+        st.warning(f"No data for age groups '{', '.join(age_groups_to_plot)}' in weekly data.")
 else:
-    st.error("Something went wrong with the view selection.")
+    st.info("Weekly deaths data unavailable for Graph 1.")
 
-# --- Optional: Add a footer ---
-st.markdown("---")
-# st.markdown("Data source: [Provide source link if applicable]")
+
+# --- Graph 2: Absolute Yearly Deaths by Gender ---
+st.header("Absolute Yearly Deaths by Gender")
+if not df_absolute_raw.empty:
+    if 'Men' in df_absolute_raw.columns and 'Women' in df_absolute_raw.columns:
+        df_abs_melted = df_absolute_raw.melt(id_vars=['Year'], value_vars=['Men', 'Women'],
+                                            var_name='Gender', value_name='Number_of_Deaths')
+        df_abs_melted.dropna(subset=['Number_of_Deaths'], inplace=True)
+        if not df_abs_melted.empty:
+            fig_absolute = px.line(df_abs_melted, x='Year', y='Number_of_Deaths', color='Gender',
+                                   title='Absolute Yearly Deaths: Men vs. Women',
+                                   labels={'Year': 'Year', 'Number_of_Deaths': 'Number of Deaths', 'Gender': 'Gender'},
+                                   markers=True)
+            st.plotly_chart(fig_absolute, use_container_width=True, config={'displayModeBar': False}) # Modebar hidden
+        else:
+            st.warning("No valid data to plot for absolute yearly deaths (after processing).")
+    else:
+        st.warning("Required 'Men' or 'Women' columns missing for absolute deaths plot.")
+else:
+    st.info("Absolute yearly deaths data unavailable for Graph 2.")
+
+
+# --- Graph 3: Yearly Mortality Rates per 100,000 by Gender ---
+st.header("Yearly Mortality Rate per 100,000 Inhabitants")
+if not df_absolute_with_rates.empty:
+    rate_columns = []
+    if 'Rate_Men' in df_absolute_with_rates.columns: rate_columns.append('Rate_Men')
+    if 'Rate_Women' in df_absolute_with_rates.columns: rate_columns.append('Rate_Women')
+    if 'Rate_Total' in df_absolute_with_rates.columns: rate_columns.append('Rate_Total')
+
+    if rate_columns:
+        df_rates_melted = df_absolute_with_rates.melt(
+            id_vars=['Year'],
+            value_vars=rate_columns,
+            var_name='Rate_Category',
+            value_name='Mortality_Rate'
+        )
+        df_rates_melted['Rate_Category'] = df_rates_melted['Rate_Category'].str.replace('Rate_', '')
+        df_rates_melted.dropna(subset=['Mortality_Rate'], inplace=True)
+
+        if not df_rates_melted.empty:
+            fig_rates = px.line(
+                df_rates_melted,
+                x='Year',
+                y='Mortality_Rate',
+                color='Rate_Category',
+                title='Yearly Mortality Rate per 100,000: Men, Women, and Total',
+                labels={'Year': 'Year', 'Mortality_Rate': 'Mortality Rate per 100,000', 'Rate_Category': 'Category'},
+                markers=True
+            )
+            st.plotly_chart(fig_rates, use_container_width=True, config={'displayModeBar': False}) # Modebar hidden
+        else:
+            st.warning("No valid rate data to plot (after processing and melting).")
+    else:
+        st.warning("No rate columns (Rate_Men, Rate_Women, Rate_Total) available in the processed data for plotting rates.")
+else:
+    st.info("Data for mortality rates (absolute deaths or population) could not be fully processed or is unavailable for Graph 3.")
