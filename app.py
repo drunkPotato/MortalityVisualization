@@ -317,8 +317,112 @@ if not df_relative_csv.empty:
                 if y_range_g3: fig_rates.update_layout(yaxis_range=y_range_g3)
                 st.plotly_chart(fig_rates, use_container_width=True, config={'displayModeBar': False})
             else: st.warning(f"No rate data for selected range for Graph 3.")
-        else: st.warning("No valid data for Graph 3 controls after melting (all rates might be NA for selected categories).")
+        else: st.warning("No valid data for Graph 3 controls after melting direct rates.")
+    else: st.warning("Required 'Men' or 'Women' columns (with rates) not found in the mortality rate file.")
+else: st.info("Mortality rate data (Mortality_rate_per_100000_inhabitants.csv) unavailable for Graph 3.")
+
+# --- Graph 4: Heatmap der wöchentlichen Total‐Todesfälle
+st.header("Heatmap: Wöchentliche Todesfälle nach Jahr und Kalenderwoche (Total)")
+
+# ----------------------------
+# 1) Lade‐ und Pivot‐Funktion
+# ----------------------------
+@st.cache_data(show_spinner=False)
+def load_weekly_totals(path: str) -> pd.DataFrame:
+    """
+    Liest 'Weekly_number_of_deaths.csv' semikolon‐separiert ein (skippt Zeilen
+   , die mit '#' beginnen), wandelt NoDeaths_EP in numerische Werte um, 
+    fasst Gruppen Year+Week zusammen und pivotiert zu einem DataFrame, 
+    dessen Index die Jahre und dessen Spalten die Kalenderwochen sind.
+    """
+
+    # 1. Datei einlesen und Kommentar‐Zeilen (# …) ignorieren
+    df = pd.read_csv(
+        path,
+        delimiter=";",
+        comment="#",
+        parse_dates=["Ending"],
+        dayfirst=True,
+        dtype={"Year": "Int64", "Week": "Int64"}
+    )
+
+    # 2. NoDeaths_EP bereinigen: Leerzeichen entfernen und nach Zahl casten
+    df["NoDeaths_EP"] = df["NoDeaths_EP"].astype(str).str.strip()
+    df["NoDeaths_EP"] = pd.to_numeric(df["NoDeaths_EP"], errors="coerce")
+
+    # 3. Alle Zeilen ohne gültige Todeszahl entfernen
+    df = df.dropna(subset=["NoDeaths_EP"])
+
+    # 4. NoDeaths_EP final auf int casten
+    df["NoDeaths_EP"] = df["NoDeaths_EP"].astype(int)
+
+    # 5. Gruppieren nach Year + Week und aufsummieren
+    df_grouped = (
+        df
+        .groupby(["Year", "Week"], as_index=False)["NoDeaths_EP"]
+        .sum()
+        .rename(columns={"NoDeaths_EP": "Deaths"})
+    )
+
+    # 6. Pivot: Index=Year, Spalten=Week, Werte=Deaths
+    pivot = df_grouped.pivot(index="Year", columns="Week", values="Deaths")
+
+    # 7. Spalten (Kalenderwochen) sortieren
+    pivot = pivot.sort_index(axis=1)
+
+    return pivot
+
+
+# ----------------------------
+# 2) Streamlit‐Abschnitt für Graph 4
+# ----------------------------
+# Hier wird das Pivot‐DataFrame geholt und als Heatmap gezeichnet.
+
+pivot = load_weekly_totals("data/Weekly_number_of_deaths.csv")
+
+if (pivot is not None) and (not pivot.empty):
+    # Jahresgrenzen für Slider ermitteln
+    min_year = int(pivot.index.min())
+    max_year = int(pivot.index.max())
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Controls for Graph 4 (Heatmap)")
+
+    year_start, year_end = st.sidebar.slider(
+        label="Year Range (G4)",
+        min_value=min_year,
+        max_value=max_year,
+        value=(min_year, max_year),
+        step=1,
+        key="G4_year_slider"
+    )
+
+    # Pivot nach ausgewählten Jahren filtern
+    
+    pivot_filtered = pivot.loc[year_start:year_end]
+
+    if not pivot_filtered.empty:
+        fig_heat = px.imshow(
+            pivot_filtered,
+            labels={"x": "Calendar week", "y": "Year", "color": "Deaths"},
+            x=pivot_filtered.columns,
+            y=pivot_filtered.index,
+            aspect="auto",
+            origin="lower",
+            color_continuous_scale="Viridis",
+            title="Seasonal Heatmap: Weekly deaths (Switzerland)"
+        )
+        fig_heat.update_layout(
+            title_font_size=18,
+            xaxis_title_font_size=14,
+            yaxis_title_font_size=14,
+            font_color="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            coloraxis_colorbar=dict(title_font_size=14, tickfont_size=12)
+        )
+        st.plotly_chart(fig_heat, use_container_width=True, config={"displayModeBar": False})
     else:
-        st.warning("No 'Men', 'Women', or 'Total' columns with data found in the mortality rate file for Graph 3. Check if 'Total' column exists in CSV if desired.")
+        st.warning("No data is available for the selected annual range (Graph 4).")
 else:
-    st.info("Mortality rate data (Mortality_rate_per_100000_inhabitants.csv) unavailable for Graph 3.")
+    st.info("Weekly_number_of_deaths.csv could not be loaded or is empty.")
