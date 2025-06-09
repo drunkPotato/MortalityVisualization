@@ -13,7 +13,7 @@ from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 # ==========================
 st.set_page_config(
     page_title="Swiss Mortality & Population Trends",
-    page_icon="🔬",      # You can also point to a local image: "assets/mortality_icon.png"
+    page_icon="🔬",      
     layout="wide"
 )
 
@@ -481,6 +481,15 @@ if not df_absolute_raw.empty:
                     markers=True,
                     template="plotly_dark"
                 )
+                # set x- and y-axis ranges and remove left padding
+                fig_g2.update_layout(
+                    xaxis=dict(
+                        range=[x_start_g2, x_end_g2],    # start exactly bei erstem Jahr, Ende beim letzten
+                        autorange=False
+                    ),
+                    margin=dict(l=10, r=20, t=50, b=50)  # l=10 reduziert den linken Rand auf 10px
+                )
+
                 if y_range_g2:
                     fig_g2.update_layout(yaxis_range=y_range_g2)
                 st.plotly_chart(fig_g2, use_container_width=True, config={'displayModeBar': False})
@@ -534,6 +543,14 @@ if not df_relative_csv.empty:
                     markers=True,
                     template="plotly_dark"
                 )
+                fig_g3.update_layout(
+                    xaxis=dict(
+                        range=[x_start_g3, x_end_g3],
+                        autorange=False
+                    ),
+                    margin=dict(l=10, r=20, t=50, b=50)
+                )
+
                 if y_range_g3:
                     fig_g3.update_layout(yaxis_range=y_range_g3)
                 st.plotly_chart(fig_g3, use_container_width=True, config={'displayModeBar': False})
