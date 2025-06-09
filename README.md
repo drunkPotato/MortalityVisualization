@@ -106,9 +106,8 @@ MORTALITYVISUALIZATION/
 
 ## Code Highlights
 
-*   **Modular Data Loading:** Separate functions (`load_weekly_deaths_data`, `load_absolute_deaths_data`, etc.) are used for loading and preprocessing each dataset, promoting reusability and clarity. `@st.cache_data` is applied to these functions to prevent redundant data loading.
-*   **Dynamic Axis Controls:** The `get_axis_ranges` helper function dynamically creates sidebar sliders for x and y axes based on the data type (datetime or numeric) and range of the provided columns.
+*   **Modular Data Loading:** Separate functions (`load_weekly_deaths_data`, `load_absolute_deaths_data`, etc.) are used for loading and preprocessing each dataset, promoting clarity. `@st.cache_data` is applied to these functions to prevent redundant data loading.
+*   **Dynamic Axis Controls:** The `get_axis_ranges` helper function dynamically creates sidebar sliders for x and y axes based on the data type and range of the provided columns.
 *   **Custom CSS Injection:** `st.markdown(..., unsafe_allow_html=True)` is used to inject custom CSS for a dark theme, rounded corners on plots, and improved typography.
-*   **Plotly Dark Template:** `px.defaults.template = "plotly_dark"` ensures all Plotly charts adhere to the dark theme by default.
 *   **Data Transformation:** Pandas `melt` function is used effectively to transform data from wide to long format, suitable for plotting with Plotly Express when comparing categories (e.g., 'Men' vs. 'Women').
 *   **Error Handling:** Basic error handling (e.g., `FileNotFoundError`, `Exception`) is included in data loading functions.
