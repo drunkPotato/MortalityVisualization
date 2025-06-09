@@ -13,7 +13,6 @@ from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 # ==========================
 st.set_page_config(
     page_title="Swiss Mortality & Population Trends",
-    page_icon="🔬",      
     layout="wide"
 )
 
@@ -315,85 +314,6 @@ def get_axis_ranges(df: pd.DataFrame, x_col: str, y_col: str, graph_key_prefix: 
     return x_start_final, x_end_final, y_range_final
 
 
-    if is_datetime:
-        # Convert to Python date objects if needed
-        if isinstance(x_min_data, pd.Timestamp):
-            x_min_data = x_min_data.date()
-        if isinstance(x_max_data, pd.Timestamp):
-            x_max_data = x_max_data.date()
-
-        min_slider_val = x_min_data
-        max_slider_val = x_max_data
-        if min_slider_val > max_slider_val:
-            min_slider_val, max_slider_val = max_slider_val, min_slider_val
-
-        x_start_sel, x_end_sel = st.sidebar.slider(
-            f"Date Range ({graph_key_prefix})",
-            min_value=min_slider_val,
-            max_value=max_slider_val,
-            value=(min_slider_val, max_slider_val),
-            format="YYYY-MM-DD",
-            key=f"{graph_key_prefix}_x_date_slider"
-        )
-        x_start_final = pd.to_datetime(x_start_sel)
-        x_end_final = pd.to_datetime(x_end_sel)
-    else:
-        # Numeric (Year) slider
-        try:
-            min_num = int(x_min_data) if pd.notna(x_min_data) else 2000
-            max_num = int(x_max_data) if pd.notna(x_max_data) else 2023
-        except:
-            min_num, max_num = 2000, 2023
-
-        if min_num >= max_num:
-            min_num, max_num = max_num - 1, max_num
-
-        x_start_sel, x_end_sel = st.sidebar.slider(
-            f"Year Range ({graph_key_prefix})",
-            min_value=min_num,
-            max_value=max_num,
-            value=(min_num, max_num),
-            key=f"{graph_key_prefix}_x_year_slider"
-        )
-        x_start_final = x_start_sel
-        x_end_final = x_end_sel
-
-    # --- Determine Y-axis range & slider ---
-    y_vals = df[y_col].dropna()
-    y_max_data = float(y_vals.max()) if not y_vals.empty else 1000.0
-    y_min_bound = 0.0
-    y_max_bound = y_max_data * 1.1 if y_max_data > 0 else 10.0
-    if y_max_bound <= y_min_bound:
-        y_max_bound = y_min_bound + 1.0
-
-    # Determine a reasonable step for the slider
-    data_range_y = y_max_bound - y_min_bound
-    if data_range_y <= 0:
-        step_y = 0.1
-    else:
-        is_integer_like = False
-        if pd.api.types.is_numeric_dtype(df[y_col]) and not y_vals.empty:
-            is_integer_like = (y_vals % 1 == 0).all() and data_range_y < 1000
-        if is_integer_like:
-            step_y = 1.0
-        else:
-            step_y = data_range_y / 100.0
-            if step_y < 0.01:
-                step_y = 0.01
-
-    y_start_sel, y_end_sel = st.sidebar.slider(
-        f"Y-Axis Range ({graph_key_prefix})",
-        min_value=y_min_bound,
-        max_value=y_max_bound,
-        value=(y_min_bound, y_max_bound),
-        step=step_y,
-        key=f"{graph_key_prefix}_y_slider"
-    )
-    y_range_final = [y_start_sel, y_end_sel]
-
-    return x_start_final, x_end_final, y_range_final
-
-
 # ==========================
 # 8) Graph 1: Weekly Deaths by Age Group (0-64 vs. 65+)
 # ==========================
@@ -481,15 +401,6 @@ if not df_absolute_raw.empty:
                     markers=True,
                     template="plotly_dark"
                 )
-                # set x- and y-axis ranges and remove left padding
-                fig_g2.update_layout(
-                    xaxis=dict(
-                        range=[x_start_g2, x_end_g2],    # start exactly bei erstem Jahr, Ende beim letzten
-                        autorange=False
-                    ),
-                    margin=dict(l=10, r=20, t=50, b=50)  # l=10 reduziert den linken Rand auf 10px
-                )
-
                 if y_range_g2:
                     fig_g2.update_layout(yaxis_range=y_range_g2)
                 st.plotly_chart(fig_g2, use_container_width=True, config={'displayModeBar': False})
@@ -543,14 +454,6 @@ if not df_relative_csv.empty:
                     markers=True,
                     template="plotly_dark"
                 )
-                fig_g3.update_layout(
-                    xaxis=dict(
-                        range=[x_start_g3, x_end_g3],
-                        autorange=False
-                    ),
-                    margin=dict(l=10, r=20, t=50, b=50)
-                )
-
                 if y_range_g3:
                     fig_g3.update_layout(yaxis_range=y_range_g3)
                 st.plotly_chart(fig_g3, use_container_width=True, config={'displayModeBar': False})
