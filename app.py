@@ -13,8 +13,8 @@ st.set_page_config(layout="wide", page_title="Swiss Mortality & Population Trend
 st.markdown("""
 <style>
     button[kind="header"][aria-label="Menu"] {
-        opacity: 1 !important; 
-        visibility: visible !important; 
+        opacity: 1 !important;
+        visibility: visible !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -28,7 +28,7 @@ def load_weekly_deaths_data(file_path):
     try:
         df = pd.read_csv(file_path, delimiter=';')
         df['Ending_Date'] = pd.to_datetime(df['Ending'], format='%d.%m.%Y', errors='coerce')
-        df['Date_Only'] = df['Ending_Date'].dt.date 
+        df['Date_Only'] = df['Ending_Date'].dt.date
         numeric_cols = ['NoDeaths_EP', 'Expected', 'LowerB', 'UpperB']
         for col in numeric_cols:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -59,12 +59,22 @@ def load_absolute_deaths_data(file_path):
             return pd.DataFrame()
 
         df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
-        numeric_cols_abs = ['Men', 'Women']
+        numeric_cols_abs = ['Men', 'Women'] # Process these first
         for col in numeric_cols_abs:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             else:
-                df[col] = pd.NA
+                st.warning(f"Column '{col}' not found in absolute deaths data. Will be filled with NAs.")
+                df[col] = pd.NA # Create with NA if missing
+
+        # Calculate Total if Men and Women columns are present and numeric
+        if 'Men' in df.columns and 'Women' in df.columns and \
+           pd.api.types.is_numeric_dtype(df['Men']) and \
+           pd.api.types.is_numeric_dtype(df['Women']):
+            df['Total'] = df['Men'] + df['Women']
+        else:
+            df['Total'] = pd.NA # Ensure Total column exists, even if all NA, if Men/Women are not suitable for sum
+
         df.dropna(subset=['Year'], inplace=True)
         df = df.sort_values(by='Year').reset_index(drop=True)
         return df
@@ -77,13 +87,13 @@ def load_absolute_deaths_data(file_path):
 
 @st.cache_data
 def load_mortality_rate_per_100000_inhabitants(file_path):
-    """Loads yearly mortality rate data per 100,000 by gender."""
+    """Loads yearly mortality rate data per 100,000 by gender and potentially total."""
     try:
         df = pd.read_csv(
-            file_path, 
+            file_path,
             delimiter=',',
-            decimal=',' 
-        ) 
+            decimal=','
+        )
         if 'X.1' in df.columns:
             df.rename(columns={'X.1': 'Year'}, inplace=True)
         elif df.columns[0].isdigit() or (df.columns[0].lower() == 'year' and len(df.columns[0])==4 ):
@@ -93,16 +103,19 @@ def load_mortality_rate_per_100000_inhabitants(file_path):
             return pd.DataFrame()
 
         df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
-        rate_columns = ['Men', 'Women']
+
+        rate_columns = ['Men', 'Women', 'Total'] # Explicitly include 'Total' to check for it in the CSV
         for col in rate_columns:
             if col in df.columns:
-                if df[col].dtype == 'object': # Should be handled by decimal=',' but for safety
-                     df[col] = pd.to_numeric(df[col].str.replace(",","."), errors='coerce') 
+                if df[col].dtype == 'object':
+                     df[col] = pd.to_numeric(df[col].str.replace(",","."), errors='coerce')
                 elif not pd.api.types.is_numeric_dtype(df[col]):
                      df[col] = pd.to_numeric(df[col], errors='coerce')
             else:
-                st.warning(f"Rate column '{col}' not found in mortality rate data.")
-                df[col] = pd.NA
+                # Only warn if core 'Men' or 'Women' are missing. 'Total' is optional from CSV.
+                if col in ['Men', 'Women']:
+                    st.warning(f"Rate column '{col}' not found in mortality rate data '{file_path}'. Will be filled with NAs.")
+                df[col] = pd.NA # Ensure the column exists for consistent structure, filled with NA if not in CSV
         
         df.dropna(subset=['Year'], inplace=True)
         df = df.sort_values(by='Year').reset_index(drop=True)
@@ -133,7 +146,7 @@ def get_axis_ranges(df, x_col, y_col, graph_key_prefix):
     x_min_data_bound = df[x_col].min()
     x_max_data_bound = df[x_col].max()
 
-    is_datetime_x = x_col == 'Date_Only' 
+    is_datetime_x = x_col == 'Date_Only'
 
     # Default values for X-axis sliders (full range of the data for initial display)
     default_x_start = x_min_data_bound
@@ -142,26 +155,25 @@ def get_axis_ranges(df, x_col, y_col, graph_key_prefix):
     if is_datetime_x:
         min_slider_val_x = default_x_start if isinstance(default_x_start, date) else date(2000,1,1)
         max_slider_val_x = default_x_end if isinstance(default_x_end, date) else date(2025,12,31)
-        if min_slider_val_x > max_slider_val_x: min_slider_val_x = max_slider_val_x 
-        
-        # The 'value' argument sets the initial position. Streamlit remembers subsequent user changes for this key.
+        if min_slider_val_x > max_slider_val_x: min_slider_val_x = max_slider_val_x
+
         x_start_selected, x_end_selected = st.sidebar.slider(
             f"Date Range ({graph_key_prefix})",
             min_value=min_slider_val_x, max_value=max_slider_val_x,
-            value=(min_slider_val_x, max_slider_val_x), 
-            format="YYYY-MM-DD", key=f"{graph_key_prefix}_x_date_slider" 
+            value=(min_slider_val_x, max_slider_val_x),
+            format="YYYY-MM-DD", key=f"{graph_key_prefix}_x_date_slider"
         )
         x_start_final = pd.to_datetime(x_start_selected)
         x_end_final = pd.to_datetime(x_end_selected)
-    else: 
+    else:
         min_slider_val_x_num = int(default_x_start) if pd.notna(default_x_start) and np.isscalar(default_x_start) else 2000
         max_slider_val_x_num = int(default_x_end) if pd.notna(default_x_end) and np.isscalar(default_x_end) else 2023
         if min_slider_val_x_num >= max_slider_val_x_num: min_slider_val_x_num = max_slider_val_x_num - 1
-        
+
         x_start_selected, x_end_selected = st.sidebar.slider(
-            f"Year Range ({graph_key_prefix})", 
-            min_slider_val_x_num, max_slider_val_x_num, 
-            (min_slider_val_x_num, max_slider_val_x_num), 
+            f"Year Range ({graph_key_prefix})",
+            min_slider_val_x_num, max_slider_val_x_num,
+            (min_slider_val_x_num, max_slider_val_x_num),
             key=f"{graph_key_prefix}_x_year_slider"
         )
         x_start_final = x_start_selected
@@ -173,16 +185,16 @@ def get_axis_ranges(df, x_col, y_col, graph_key_prefix):
     y_data_max_val = df[y_col].max() if not df[y_col].empty else 1000.0
     y_data_max_val = float(y_data_max_val) if pd.notna(y_data_max_val) else 1000.0
 
-    slider_min_bound_y = 0.0 
+    slider_min_bound_y = 0.0
     slider_max_bound_y = y_data_max_val * 1.1 if y_data_max_val > 0 else 10.0
-    if slider_max_bound_y <= slider_min_bound_y : 
-        slider_max_bound_y = slider_min_bound_y + 100 
+    if slider_max_bound_y <= slider_min_bound_y :
+        slider_max_bound_y = slider_min_bound_y + 100
 
-    default_y_start = slider_min_bound_y 
-    default_y_end = slider_max_bound_y   
+    default_y_start = slider_min_bound_y
+    default_y_end = slider_max_bound_y
 
     data_range_y = slider_max_bound_y - slider_min_bound_y
-    step_y = 1.0 
+    step_y = 1.0
     if data_range_y > 0 :
         is_y_integer_like = (df[y_col].dropna()%1 == 0).all() if not df[y_col].dropna().empty and pd.api.types.is_numeric_dtype(df[y_col]) else False
         if is_y_integer_like and data_range_y < 1000 : step_y = 1.0
@@ -195,11 +207,11 @@ def get_axis_ranges(df, x_col, y_col, graph_key_prefix):
     y_min_user, y_max_user = st.sidebar.slider(
         f"Y-Axis Values ({graph_key_prefix})",
         min_value=slider_min_bound_y, max_value=slider_max_bound_y,
-        value=(default_y_start, default_y_end), 
-        step=step_y if step_y > 0 else None, key=f"{graph_key_prefix}_y_slider" 
+        value=(default_y_start, default_y_end),
+        step=step_y if step_y > 0 else None, key=f"{graph_key_prefix}_y_slider"
     )
     y_range_user = [y_min_user, y_max_user] if y_min_user < y_max_user else [y_min_user, y_max_user + (step_y if step_y > 0 else 0.1)]
-    
+
     return x_start_final, x_end_final, y_range_user
 
 # --- Graph 1: Weekly Deaths by Age Group ---
@@ -211,11 +223,11 @@ if not df_weekly.empty:
     if not data_for_g1_controls.empty and 'Date_Only' in data_for_g1_controls.columns:
         st.sidebar.markdown("---")
         st.sidebar.subheader("Controls for Graph 1 (Weekly Deaths)")
-        x_start_g1, x_end_g1, y_range_g1 = get_axis_ranges(data_for_g1_controls, 'Date_Only', 'NoDeaths_EP', "G1") 
-        
+        x_start_g1, x_end_g1, y_range_g1 = get_axis_ranges(data_for_g1_controls, 'Date_Only', 'NoDeaths_EP', "G1")
+
         plot_df_g1 = data_for_g1_controls[
-            (data_for_g1_controls['Ending_Date'] >= x_start_g1) & # pd.to_datetime() removed, x_start_g1 is already datetime
-            (data_for_g1_controls['Ending_Date'] <= x_end_g1)  # pd.to_datetime() removed
+            (data_for_g1_controls['Ending_Date'] >= x_start_g1) &
+            (data_for_g1_controls['Ending_Date'] <= x_end_g1)
         ]
 
         if not plot_df_g1.empty:
@@ -235,13 +247,22 @@ else:
     st.info("Weekly deaths data unavailable for Graph 1.")
 
 
-# --- Graph 2 ---
-st.header("Absolute Yearly Deaths by Gender")
+# --- Graph 2: Absolute Yearly Deaths by Gender and Total ---
+st.header("Absolute Yearly Deaths by Gender and Total")
 if not df_absolute_raw.empty:
-    if 'Men' in df_absolute_raw.columns and 'Women' in df_absolute_raw.columns:
-        data_for_g2_controls = df_absolute_raw.melt(id_vars=['Year'], value_vars=['Men', 'Women'],
-                                                    var_name='Gender', value_name='Number_of_Deaths')
+    value_vars_g2 = []
+    if 'Men' in df_absolute_raw.columns and df_absolute_raw['Men'].notna().any():
+        value_vars_g2.append('Men')
+    if 'Women' in df_absolute_raw.columns and df_absolute_raw['Women'].notna().any():
+        value_vars_g2.append('Women')
+    if 'Total' in df_absolute_raw.columns and df_absolute_raw['Total'].notna().any(): # 'Total' is calculated in load_absolute_deaths_data
+        value_vars_g2.append('Total')
+
+    if value_vars_g2:
+        data_for_g2_controls = df_absolute_raw.melt(id_vars=['Year'], value_vars=value_vars_g2,
+                                                    var_name='Category', value_name='Number_of_Deaths')
         data_for_g2_controls.dropna(subset=['Number_of_Deaths'], inplace=True)
+
         if not data_for_g2_controls.empty:
             st.sidebar.markdown("---")
             st.sidebar.subheader("Controls for Graph 2 (Absolute Yearly)")
@@ -250,40 +271,49 @@ if not df_absolute_raw.empty:
                 (data_for_g2_controls['Year'] >= x_start_g2) & (data_for_g2_controls['Year'] <= x_end_g2)
             ]
             if not plot_df_g2.empty:
-                fig_absolute = px.line(plot_df_g2, x='Year', y='Number_of_Deaths', color='Gender',
-                                       title='Absolute Yearly Deaths: Men vs. Women',
-                                       labels={'Year': 'Year', 'Number_of_Deaths': 'Number of Deaths', 'Gender': 'Gender'}, markers=True)
+                fig_absolute = px.line(plot_df_g2, x='Year', y='Number_of_Deaths', color='Category',
+                                       title='Absolute Yearly Deaths: Men, Women, and Total',
+                                       labels={'Year': 'Year', 'Number_of_Deaths': 'Number of Deaths', 'Category': 'Category'}, markers=True)
                 if y_range_g2: fig_absolute.update_layout(yaxis_range=y_range_g2)
                 st.plotly_chart(fig_absolute, use_container_width=True, config={'displayModeBar': False})
             else: st.warning(f"No absolute yearly data for selected range for Graph 2.")
-        else: st.warning("No valid data for Graph 2 controls.")
-    else: st.warning("Men/Women columns missing for Graph 2.")
-else: st.info("Absolute yearly deaths data unavailable for Graph 2.")
+        else: st.warning("No valid data for Graph 2 controls after melting.")
+    else:
+        st.warning("Not enough data columns ('Men', 'Women', 'Total') with valid numbers found in absolute deaths data for Graph 2.")
+else:
+    st.info("Absolute yearly deaths data unavailable for Graph 2.")
 
-# --- Graph 3 ---
+# --- Graph 3: Yearly Mortality Rate per 100,000 Inhabitants ---
 st.header("Yearly Mortality Rate per 100,000 Inhabitants")
-if not df_relative_csv.empty: # Use df_relative_csv (loaded mortality rates)
-    # Assuming df_relative_csv has 'Year', 'Men', 'Women' columns with rates
-    if 'Men' in df_relative_csv.columns and 'Women' in df_relative_csv.columns:
+if not df_relative_csv.empty:
+    value_vars_g3 = []
+    if 'Men' in df_relative_csv.columns and df_relative_csv['Men'].notna().any():
+        value_vars_g3.append('Men')
+    if 'Women' in df_relative_csv.columns and df_relative_csv['Women'].notna().any():
+        value_vars_g3.append('Women')
+    if 'Total' in df_relative_csv.columns and df_relative_csv['Total'].notna().any(): # 'Total' must come from the CSV
+        value_vars_g3.append('Total')
+
+    if value_vars_g3:
         data_for_g3_controls = df_relative_csv.melt(
-            id_vars=['Year'], value_vars=['Men', 'Women'], # Use 'Men' and 'Women' as they contain the rates
-            var_name='Gender', # Melt into a 'Gender' column
+            id_vars=['Year'], value_vars=value_vars_g3,
+            var_name='Category',
             value_name='Mortality_Rate'
         )
         data_for_g3_controls.dropna(subset=['Mortality_Rate'], inplace=True)
-        
+
         if not data_for_g3_controls.empty:
             st.sidebar.markdown("---")
             st.sidebar.subheader("Controls for Graph 3 (Yearly Rates)")
             x_start_g3, x_end_g3, y_range_g3 = get_axis_ranges(data_for_g3_controls, 'Year', 'Mortality_Rate', "G3")
-            
+
             plot_df_g3 = data_for_g3_controls[
                 (data_for_g3_controls['Year'] >= x_start_g3) & (data_for_g3_controls['Year'] <= x_end_g3)
             ]
             if not plot_df_g3.empty:
-                fig_rates = px.line(plot_df_g3, x='Year', y='Mortality_Rate', color='Gender', # Color by Gender
-                                    title='Yearly Mortality Rate per 100,000: Men vs. Women',
-                                    labels={'Year': 'Year', 'Mortality_Rate': 'Mortality Rate per 100,000', 'Gender': 'Gender'}, markers=True)
+                fig_rates = px.line(plot_df_g3, x='Year', y='Mortality_Rate', color='Category',
+                                    title='Yearly Mortality Rate per 100,000 by Category',
+                                    labels={'Year': 'Year', 'Mortality_Rate': 'Mortality Rate per 100,000', 'Category': 'Category'}, markers=True)
                 if y_range_g3: fig_rates.update_layout(yaxis_range=y_range_g3)
                 st.plotly_chart(fig_rates, use_container_width=True, config={'displayModeBar': False})
             else: st.warning(f"No rate data for selected range for Graph 3.")
