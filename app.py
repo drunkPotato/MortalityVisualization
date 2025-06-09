@@ -11,7 +11,7 @@ from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 # ==========================
 st.set_page_config(
     page_title="Swiss Mortality & Population Trends",
-    page_icon="🔬",      
+    page_icon="\U0001F4CA",      
     layout="wide"
 )
 
