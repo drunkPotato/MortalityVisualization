@@ -419,6 +419,10 @@ if not df_weekly.empty:
                 x='Ending_Date',
                 y='NoDeaths_EP',
                 color='Age',
+                color_discrete_map={
+                    "0-64": "#66c2a5",  
+                    "65+":  "#fc8d62"    
+                },
                 title='Weekly Deaths by Age Group',
                 labels={
                     'Ending_Date': 'Date',
