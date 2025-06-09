@@ -45,13 +45,13 @@ Users can explore trends by age group, gender, and mortality rates, as well as v
 
 The dashboard utilizes the following datasets:
 
-1.  `data/Weekly_number_of_deaths.csv`: Contains weekly death counts, potentially broken down by age group. Used for Graph 1 and Graph 4.
+1.  `data/Weekly_number_of_deaths.csv`: Contains weekly death counts, split into 0-64 and 65+ year olds. Used for Graph 1 and Graph 4.
 2.  `data/Deaths_Absolute_number.csv`: Contains absolute yearly death counts, broken down by gender. Used for Graph 2.
 3.  `data/Mortality_rate_per_100000_inhabitants.csv`: Contains yearly mortality rates per 100,000 inhabitants, broken down by gender. Used for Graph 3.
 
 ## Technologies Used
 
-*   **Python 3.x**
+*   **Python 3.12.8**
 *   **Streamlit:** For building the interactive web application.
 *   **Pandas:** For data manipulation and analysis.
 *   **Plotly Express:** For creating interactive charts and visualizations.
@@ -85,21 +85,23 @@ The dashboard utilizes the following datasets:
 
 ## Project Structure
 
-├── app.py # Main Streamlit application script
+```text
+MORTALITYVISUALIZATION/
+├── app.py            
 ├── data/
 │   ├── Weekly_number_of_deaths.csv
 │   ├── Deaths_Absolute_number.csv
 │   └── Mortality_rate_per_100000_inhabitants.csv
-├── .gitignore
-├── requirements.txt # Python dependencies
-├── README.md # This file
 ├── screenshots/
 │   ├── Absolute Yearly Deaths by Gender.png
 │   ├── heatmap.png
 │   ├── Weekly Deaths by Age Group.png
 │   └── Yearly Mortality Rate per100,000 Inhabitants.png
-
-
+├── .gitignore
+├── requirements.txt        
+├── README.md                 
+├── .streamlit/               
+└── __pycache__/              
 
 
 ## Code Highlights
